@@ -1,0 +1,5 @@
+{
+  "name": "Lumina AI - Presentation Generator",
+  "description": "Generate professional PowerPoint presentations with diagrams and illustrations from text or files using Gemini 2.5.",
+  "requestFramePermissions": []
+}
