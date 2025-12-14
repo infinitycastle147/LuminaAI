@@ -3,9 +3,10 @@ import { Slide } from "../types";
 
 // Helper to init AI
 const getAiClient = () => {
-  const apiKey = process.env.API_KEY;
+  // Uses GEMINI_API_KEY from environment variables (configured in vite.config.ts)
+  const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
   if (!apiKey) {
-    throw new Error("API Key not found in environment variables");
+    throw new Error("API Key not found in environment variables. Please set GEMINI_API_KEY in .env.local");
   }
   return new GoogleGenAI({ apiKey });
 };
@@ -34,7 +35,7 @@ export const generatePresentationStructure = async (
   const promptText = `Create a presentation about: ${topic}.`;
 
   const parts: any[] = [{ text: promptText }];
-  
+
   if (fileData) {
     parts.push({
       inlineData: {
@@ -59,9 +60,9 @@ export const generatePresentationStructure = async (
           type: Type.OBJECT,
           properties: {
             title: { type: Type.STRING },
-            layout: { 
-              type: Type.STRING, 
-              enum: ['title', 'content_right', 'content_left', 'diagram_center'] 
+            layout: {
+              type: Type.STRING,
+              enum: ['title', 'content_right', 'content_left', 'diagram_center']
             },
             content: {
               type: Type.ARRAY,
@@ -94,8 +95,8 @@ export const generatePresentationStructure = async (
  */
 export const generateSlideImage = async (prompt: string): Promise<string> => {
   const ai = getAiClient();
-  const model = "gemini-2.5-flash-image"; 
-  
+  const model = "gemini-2.5-flash-image";
+
   try {
     const response = await ai.models.generateContent({
       model,
@@ -105,13 +106,13 @@ export const generateSlideImage = async (prompt: string): Promise<string> => {
     });
 
     for (const candidate of response.candidates || []) {
-        for (const part of candidate.content.parts) {
-            if (part.inlineData && part.inlineData.data) {
-                return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
-            }
+      for (const part of candidate.content.parts) {
+        if (part.inlineData && part.inlineData.data) {
+          return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
         }
+      }
     }
-    
+
     throw new Error("No image data found in response");
   } catch (error) {
     console.error("Image gen error", error);
@@ -143,7 +144,7 @@ export const generateSpeech = async (text: string): Promise<string> => {
 
     const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
     if (!base64Audio) throw new Error("No audio data generated");
-    
+
     return base64Audio;
   } catch (error) {
     console.error("TTS Generation Error", error);
