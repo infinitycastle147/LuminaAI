@@ -1,3 +1,4 @@
+
 export interface Slide {
   id: number;
   title: string;
@@ -8,6 +9,7 @@ export interface Slide {
   layout: 'title' | 'content_right' | 'content_left' | 'diagram_center';
   audioUrl?: string; // Blob URL for the audio
   duration?: number; // Duration in seconds
+  source?: 'extracted' | 'generated';
 }
 
 export interface PresentationData {
@@ -19,11 +21,13 @@ export enum AppState {
   INPUT = 'INPUT',
   GENERATING_STRUCTURE = 'GENERATING_STRUCTURE',
   GENERATING_IMAGES = 'GENERATING_IMAGES',
-  GENERATING_VIDEO = 'GENERATING_VIDEO', // New state
+  GENERATING_VIDEO = 'GENERATING_VIDEO',
   PREVIEW = 'PREVIEW',
-  VIDEO_PLAYER = 'VIDEO_PLAYER', // New state
+  VIDEO_PLAYER = 'VIDEO_PLAYER',
   ERROR = 'ERROR'
 }
+
+export type GenerationMode = 'create' | 'convert';
 
 export interface GenerationProgress {
   currentSlide: number;
