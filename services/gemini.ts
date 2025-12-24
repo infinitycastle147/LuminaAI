@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Type, Modality } from "@google/genai";
-import { Slide, GenerationMode } from "../types";
+import { Slide, GenerationMode, SlideSource } from "../types";
 
 const MODELS = {
   STRUCTURE: "gemini-3-flash-preview",
@@ -14,6 +14,13 @@ const getAiClient = () => {
   return new GoogleGenAI({ apiKey });
 };
 
+/**
+ * Strips Markdown code blocks and cleans the string for JSON parsing.
+ */
+const sanitizeJsonResponse = (text: string): string => {
+  return text.replace(/```json/g, "").replace(/```/g, "").trim();
+};
+
 export const generatePresentationStructure = async (
   topic: string,
   fileData?: { data: string; mimeType: string },
@@ -22,33 +29,50 @@ export const generatePresentationStructure = async (
   const ai = getAiClient();
   const isConvert = mode === 'convert';
 
-  const systemInstruction = `You are a high-fidelity presentation converter.
-  
-  TASK:
-  ${isConvert 
-    ? "MODE: CONVERT. You are an extraction engine. Parse the attached document. For EVERY slide you find, extract the Title and Bullet points EXACTLY as they appear. Do not summarize. Do not innovate. Then, write a professional 3-4 sentence 'speakerNotes' for that slide's narration. Map each slide to the JSON schema." 
-    : "MODE: CREATE. Brainstorm and design a NEW 7-slide presentation based on the topic. Use 'title' layout for the first slide and varied layouts for the rest."
-  }
+  const systemInstruction = isConvert ? `
+You are a Lossless Document-to-Audio Synchronizer.
+The user has provided a file that WILL be used as the visual source.
 
-  Rules:
-  1. Slide Source: Mark every slide with source: '${isConvert ? 'extracted' : 'generated'}'.
-  2. Formatting: Layouts available: 'title', 'content_right', 'content_left', 'diagram_center'.
-  3. Image Prompts: Even for converted slides, generate an 'imagePrompt' describing the slide's visual theme (though it might be skipped).
-  4. Narrator: Speaker notes should be conversational and fluid for text-to-speech.
-  `;
+### Your Goal
+Read the document and generate EXACT narration scripts (speakerNotes) and structural metadata for each slide. 
+You are NOT redesigning the slides. You are NOT summarizing them.
+
+### Extraction Rules
+1. Match the exact slide count and order.
+2. For each slide, extract the Title and main bullets EXACTLY as written.
+3. For each slide, write a conversational 'speakerNotes' script that narrates exactly what is on that slide.
+4. Layout mapping: Choose the layout that best describes where the text is located (title, content_left, etc.)
+
+Accuracy is paramount. If you see Slide 1 has "Introduction", the JSON slide 1 title must be "Introduction".
+` : `
+You are a world-class research assistant and presentation designer.
+MODE: CREATE. 
+
+### Your Goal
+Use Google Search to find up-to-date facts, statistics, recent news, and accurate details about the requested topic. 
+Generate a new 7-slide deck that is highly informative and visually engaging.
+
+### Content Rules
+1. Slide 1 must be 'title'.
+2. Use Google Search data to ensure all technical claims or current events are accurate.
+3. Provide descriptive imagePrompts for the AI image generator.
+4. Mark source as 'generated'.
+5. Always output valid JSON matching the schema.
+`;
 
   const response = await ai.models.generateContent({
     model: MODELS.STRUCTURE,
     contents: { 
       parts: [
-        { text: `Process this as ${mode.toUpperCase()} request. ${topic ? `Context: ${topic}` : ''}` },
+        { text: isConvert ? "Sync narration for this document." : `Topic: ${topic}` },
         ...(fileData ? [{ inlineData: fileData }] : [])
       ] 
     },
     config: {
       systemInstruction,
+      tools: isConvert ? [] : [{ googleSearch: {} }],
       responseMimeType: "application/json",
-      temperature: isConvert ? 0.0 : 0.4,
+      temperature: isConvert ? 0.0 : 0.7,
       responseSchema: {
         type: Type.ARRAY,
         items: {
@@ -68,33 +92,58 @@ export const generatePresentationStructure = async (
   });
 
   const text = response.text;
-  if (!text) throw new Error("No response from structure model");
-  return JSON.parse(text).map((s: any, i: number) => ({ ...s, id: i + 1 }));
+  if (!text) throw new Error("Document analysis failed.");
+  
+  // Extract grounding sources if available
+  const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
+  const webSources: SlideSource[] = [];
+  if (groundingChunks) {
+    for (const chunk of groundingChunks) {
+      if (chunk.web) {
+        webSources.push({
+          uri: chunk.web.uri,
+          title: chunk.web.title
+        });
+      }
+    }
+  }
+
+  try {
+    const cleanJson = sanitizeJsonResponse(text);
+    const slides: any[] = JSON.parse(cleanJson);
+    
+    return slides.map((s: any, i: number) => ({ 
+      ...s, 
+      id: i + 1,
+      // Distribute web sources to the relevant slides or just include them on all generated slides if relevant
+      sources: webSources.length > 0 ? webSources : undefined
+    }));
+  } catch (err) {
+    console.error("JSON Parse Error:", text);
+    throw new Error("The AI returned an invalid data format. Please try again.");
+  }
 };
 
 export const generateSlideImage = async (prompt: string): Promise<string> => {
   const ai = getAiClient();
   const fallbacks = [
     "https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&q=80&w=1200",
-    "https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&q=80&w=1200",
-    "https://images.unsplash.com/photo-1553877522-43269d4ea984?auto=format&fit=crop&q=80&w=1200",
-    "https://images.unsplash.com/photo-1504384308090-c894fdcc538d?auto=format&fit=crop&q=80&w=1200"
+    "https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&q=80&w=1200"
   ];
-
   try {
     const response = await ai.models.generateContent({
       model: MODELS.IMAGE,
-      contents: { parts: [{ text: `${prompt}. Corporate style, clean, white background.` }] },
-      config: { imageConfig: { aspectRatio: "16:9" } }
+      contents: { parts: [{ text: `${prompt}. Corporate style.` }] },
+      config: { 
+        imageConfig: { aspectRatio: "16:9" },
+        thinkingConfig: { thinkingBudget: 0 } 
+      }
     });
-
     const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
     if (part?.inlineData?.data) return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
-    throw new Error("No image data");
-  } catch (error: any) {
-    const isQuota = error?.message?.includes('429') || error?.message?.includes('RESOURCE_EXHAUSTED');
-    console.warn(isQuota ? "Quota limit reached - Using fallback visual." : `Image Error: ${error.message}`);
-    return fallbacks[prompt.length % fallbacks.length];
+    return fallbacks[0];
+  } catch (e) {
+    return fallbacks[0];
   }
 };
 
@@ -108,7 +157,5 @@ export const generateSpeech = async (text: string): Promise<string> => {
       speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } },
     },
   });
-  const data = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-  if (!data) throw new Error("Speech synthesis failed");
-  return data;
+  return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data || "";
 };

@@ -5,10 +5,17 @@
 export const GEMINI_TTS_SAMPLE_RATE = 24000;
 
 let sharedAudioCtx: AudioContext | null = null;
-const getAudioCtx = () => {
+const getAudioCtx = async () => {
   if (!sharedAudioCtx) {
     sharedAudioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
   }
+  
+  // Browsers often suspend AudioContext if it wasn't started via a direct user gesture.
+  // We resume it here to ensure decodeAudioData doesn't hang.
+  if (sharedAudioCtx.state === 'suspended') {
+    await sharedAudioCtx.resume();
+  }
+  
   return sharedAudioCtx;
 };
 
@@ -73,11 +80,11 @@ export const pcmToWavBlob = (base64Pcm: string, sampleRate = GEMINI_TTS_SAMPLE_R
 export const getAudioDuration = async (blob: Blob): Promise<number> => {
   try {
     const arrayBuffer = await blob.arrayBuffer();
-    const audioCtx = getAudioCtx();
+    const audioCtx = await getAudioCtx();
     const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
     return audioBuffer.duration;
   } catch (err) {
     console.error("Failed to decode audio data", err);
-    return 5; // Fallback
+    return 5; // Safe fallback duration
   }
 };
