@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { Slide } from '../types';
 import { ExternalLink } from 'lucide-react';
 
@@ -8,20 +8,37 @@ interface SlidePreviewProps {
 }
 
 const SlidePreview: React.FC<SlidePreviewProps> = React.memo(({ slide }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
   const isExtracted = slide.source === 'extracted';
   const hasOriginal = !!slide.originalImageUrl;
 
-  // Inner content renderer to keep 16:9 consistency
+  useEffect(() => {
+    const updateScale = () => {
+      if (containerRef.current) {
+        const { width } = containerRef.current.getBoundingClientRect();
+        setScale(width / 1920);
+      }
+    };
+
+    updateScale();
+    const observer = new ResizeObserver(updateScale);
+    if (containerRef.current) observer.observe(containerRef.current);
+
+    return () => observer.disconnect();
+  }, []);
+
+  // Inner content renderer (Fixed 1920x1080)
   const renderContent = () => {
     if (hasOriginal) {
       return (
-        <div className="w-full h-full bg-slate-900 flex items-center justify-center overflow-hidden">
+        <div className="w-[1920px] h-[1080px] bg-slate-900 flex items-center justify-center overflow-hidden relative">
           <img 
             src={slide.originalImageUrl} 
             className="w-full h-full object-contain" 
             alt={`Slide ${slide.id}`}
           />
-          <div className="absolute bottom-4 right-6 bg-slate-900/80 text-white text-[9px] md:text-[10px] font-black px-3 py-1 rounded-full shadow-lg backdrop-blur-sm tracking-widest uppercase ring-1 ring-white/10 z-20 pointer-events-none">
+          <div className="absolute bottom-8 right-12 bg-slate-900/80 text-white text-2xl font-black px-6 py-2 rounded-full shadow-lg backdrop-blur-sm tracking-widest uppercase ring-2 ring-white/10 z-20 pointer-events-none">
             Verified Asset
           </div>
         </div>
@@ -29,36 +46,36 @@ const SlidePreview: React.FC<SlidePreviewProps> = React.memo(({ slide }) => {
     }
 
     return (
-      <div className={`w-full h-full flex flex-col transition-colors duration-500 ${isExtracted ? 'bg-slate-50' : 'bg-white'}`}>
-        {/* Slide Header */}
-        <div className="h-[12%] bg-white border-b border-slate-100 flex items-center justify-between px-6 md:px-10 shrink-0">
-          <h3 className="text-xs md:text-sm font-bold text-slate-400 truncate max-w-[60%] tracking-widest uppercase">
+      <div className={`w-[1920px] h-[1080px] flex flex-col transition-colors duration-500 ${isExtracted ? 'bg-slate-50' : 'bg-white'}`}>
+        {/* Slide Header (Height: ~140px) */}
+        <div className="h-[140px] bg-white border-b-2 border-slate-100 flex items-center justify-between px-16 shrink-0">
+          <h3 className="text-3xl font-bold text-slate-400 truncate max-w-[60%] tracking-[0.2em] uppercase">
             {isExtracted ? 'Direct Extraction' : 'AI Composition'}
           </h3>
-          <div className="flex gap-2 items-center">
+          <div className="flex gap-4 items-center">
             {isExtracted && (
-              <div className="flex items-center gap-1.5 bg-indigo-50 px-2 md:px-3 py-1 rounded-full border border-indigo-100">
-                <span className="text-[8px] md:text-[10px] font-bold text-indigo-700 uppercase tracking-widest">Source-Matched</span>
+              <div className="flex items-center gap-3 bg-indigo-50 px-6 py-2 rounded-full border-2 border-indigo-100">
+                <span className="text-xl font-bold text-indigo-700 uppercase tracking-widest">Source-Matched</span>
               </div>
             )}
-            <div className="w-2 h-2 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.5)]"></div>
+            <div className="w-5 h-5 rounded-full bg-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.5)]"></div>
           </div>
         </div>
 
         {/* Main Body */}
-        <div className="flex-1 p-8 md:p-14 relative overflow-hidden flex flex-col justify-center">
+        <div className="flex-1 p-20 relative overflow-hidden flex flex-col justify-center">
           {isExtracted ? (
-            <div className="max-w-5xl mx-auto w-full space-y-6">
-              <h1 className="text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-black text-slate-900 leading-tight tracking-tight border-l-4 md:border-l-8 border-indigo-500 pl-4 md:pl-8 hyphens-auto">
+            <div className="max-w-[1600px] mx-auto w-full space-y-12">
+              <h1 className="text-8xl font-black text-slate-900 leading-tight tracking-tight border-l-[16px] border-indigo-500 pl-12 hyphens-auto">
                 {slide.title}
               </h1>
-              <div className="space-y-3 md:space-y-4 pl-4 md:pl-10">
+              <div className="space-y-8 pl-16">
                 {slide.content.map((point, idx) => (
                   <div key={idx} className="flex items-start">
-                    <span className="text-indigo-400 font-mono text-sm md:text-xl mr-3 md:mr-6 mt-1 opacity-50">
+                    <span className="text-indigo-400 font-mono text-4xl mr-8 mt-2 opacity-50">
                       {String(idx + 1).padStart(2, '0')}
                     </span>
-                    <p className="text-lg sm:text-xl md:text-2xl lg:text-3xl text-slate-700 font-medium leading-relaxed hyphens-auto">
+                    <p className="text-5xl text-slate-700 font-medium leading-relaxed hyphens-auto max-w-[90%]">
                       {point}
                     </p>
                   </div>
@@ -69,33 +86,33 @@ const SlidePreview: React.FC<SlidePreviewProps> = React.memo(({ slide }) => {
             <div className="h-full flex flex-col">
               <div className="flex-1">
                 {slide.layout === 'title' ? (
-                  <div className="h-full flex flex-col items-center justify-center text-center space-y-6 md:space-y-8">
-                    <h1 className="text-3xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold text-slate-900 leading-[1.1] tracking-tighter max-w-[95%] hyphens-auto">
+                  <div className="h-full flex flex-col items-center justify-center text-center space-y-16">
+                    <h1 className="text-[120px] font-extrabold text-slate-900 leading-[1.1] tracking-tighter max-w-[90%] hyphens-auto">
                       {slide.title}
                     </h1>
-                    <div className="h-1 md:h-2 w-20 md:w-32 bg-indigo-600 rounded-full shadow-lg"></div>
-                    <div className="space-y-2 md:space-y-4 max-w-4xl mx-auto">
+                    <div className="h-4 w-48 bg-indigo-600 rounded-full shadow-lg"></div>
+                    <div className="space-y-6 max-w-[1400px] mx-auto">
                       {slide.content.map((point, idx) => (
-                        <p key={idx} className="text-lg sm:text-2xl md:text-3xl text-slate-500 font-medium hyphens-auto italic">{point}</p>
+                        <p key={idx} className="text-5xl text-slate-500 font-medium hyphens-auto italic leading-relaxed">{point}</p>
                       ))}
                     </div>
                   </div>
                 ) : (
-                  <div className={`flex h-full gap-8 md:gap-12 items-center ${slide.layout === 'content_right' ? 'flex-row-reverse' : ''}`}>
-                    <div className="w-full md:w-3/5 flex flex-col justify-center">
-                      <h2 className="text-xl sm:text-3xl md:text-4xl lg:text-5xl font-black text-slate-900 mb-6 md:mb-8 leading-tight hyphens-auto">{slide.title}</h2>
-                      <ul className="space-y-4 md:space-y-6">
+                  <div className={`flex h-full gap-24 items-center ${slide.layout === 'content_right' ? 'flex-row-reverse' : ''}`}>
+                    <div className="w-3/5 flex flex-col justify-center pl-8">
+                      <h2 className="text-7xl font-black text-slate-900 mb-16 leading-tight hyphens-auto">{slide.title}</h2>
+                      <ul className="space-y-10">
                         {slide.content.map((point, idx) => (
                           <li key={idx} className="flex items-start">
-                            <div className="w-6 h-6 md:w-10 md:h-10 flex items-center justify-center text-[10px] md:text-base font-bold text-indigo-600 bg-indigo-50 rounded-xl mt-1 mr-3 md:mr-5 shrink-0 border border-indigo-100 shadow-sm">{idx + 1}</div>
-                            <span className="text-base sm:text-xl md:text-2xl lg:text-3xl text-slate-600 font-medium leading-snug hyphens-auto">{point}</span>
+                            <div className="w-16 h-16 flex items-center justify-center text-3xl font-bold text-indigo-600 bg-indigo-50 rounded-2xl mt-2 mr-8 shrink-0 border-2 border-indigo-100 shadow-sm">{idx + 1}</div>
+                            <span className="text-5xl text-slate-600 font-medium leading-normal hyphens-auto">{point}</span>
                           </li>
                         ))}
                       </ul>
                     </div>
-                    <div className="hidden md:block md:w-2/5 h-[80%] relative">
+                    <div className="w-2/5 h-[85%] relative">
                       {slide.imageUrl && (
-                        <div className="w-full h-full rounded-[2.5rem] overflow-hidden shadow-2xl border-4 border-white ring-1 ring-slate-100">
+                        <div className="w-full h-full rounded-[3rem] overflow-hidden shadow-2xl border-8 border-white ring-1 ring-slate-200">
                           <img src={slide.imageUrl} className="w-full h-full object-cover" alt={slide.title} />
                         </div>
                       )}
@@ -106,19 +123,16 @@ const SlidePreview: React.FC<SlidePreviewProps> = React.memo(({ slide }) => {
 
               {/* Research Sources link footer inside slide area */}
               {!isExtracted && slide.sources && slide.sources.length > 0 && (
-                <div className="mt-4 pt-4 border-t border-slate-100/50">
-                  <div className="flex flex-wrap gap-2">
-                    {slide.sources.slice(0, 2).map((src, idx) => (
-                      <a 
+                <div className="mt-8 pt-8 border-t border-slate-100">
+                  <div className="flex flex-wrap gap-4">
+                    {slide.sources.slice(0, 3).map((src, idx) => (
+                      <div 
                         key={idx} 
-                        href={src.uri} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 px-3 py-1 bg-white hover:bg-indigo-50 text-slate-400 hover:text-indigo-600 rounded-full border border-slate-100 hover:border-indigo-100 text-[10px] font-bold transition-all"
+                        className="inline-flex items-center gap-3 px-6 py-2 bg-white text-slate-400 rounded-full border border-slate-200 text-xl font-bold"
                       >
-                        <ExternalLink className="w-3 h-3" />
-                        <span className="truncate max-w-[200px] uppercase tracking-wider">{src.title}</span>
-                      </a>
+                        <ExternalLink className="w-5 h-5" />
+                        <span className="truncate max-w-[400px] uppercase tracking-wider">{src.title}</span>
+                      </div>
                     ))}
                   </div>
                 </div>
@@ -127,12 +141,12 @@ const SlidePreview: React.FC<SlidePreviewProps> = React.memo(({ slide }) => {
           )}
         </div>
 
-        {/* Slide Footer */}
-        <div className="h-[8%] bg-white border-t border-slate-50 flex items-center justify-between px-8 md:px-12 shrink-0">
-          <span className="text-[9px] md:text-[11px] text-slate-300 font-black tracking-[0.4em] uppercase italic">
+        {/* Slide Footer (Height: ~100px) */}
+        <div className="h-[100px] bg-white border-t-2 border-slate-50 flex items-center justify-between px-16 shrink-0">
+          <span className="text-2xl text-slate-300 font-black tracking-[0.4em] uppercase italic">
             Lumina Studio Sync
           </span>
-          <span className="text-[10px] md:text-xs font-bold text-slate-400">
+          <span className="text-2xl font-bold text-slate-400">
             {slide.id < 10 ? `0${slide.id}` : slide.id}
           </span>
         </div>
@@ -141,8 +155,21 @@ const SlidePreview: React.FC<SlidePreviewProps> = React.memo(({ slide }) => {
   };
 
   return (
-    <div className="w-full h-full aspect-video shadow-2xl overflow-hidden relative select-none">
-      {renderContent()}
+    <div 
+      ref={containerRef} 
+      className="w-full aspect-video shadow-2xl overflow-hidden relative select-none bg-slate-100"
+    >
+      <div 
+        style={{ 
+          width: 1920, 
+          height: 1080, 
+          transform: `scale(${scale})`, 
+          transformOrigin: 'top left' 
+        }}
+        className="origin-top-left"
+      >
+        {renderContent()}
+      </div>
     </div>
   );
 }, (prevProps, nextProps) => {
